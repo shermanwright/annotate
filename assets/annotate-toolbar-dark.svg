@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="38" height="255.8" viewBox="0 0 38 255.8" fill="none">
+  <title>Annotate.js — dark toolbar</title>
+  <desc>Current annotate.js default expanded right-hand toolbar, Browse selected, no comments, menus closed. Source UI_SCALE 0.9. Named groups contain editable vector shapes. Glass fill is rgba(30,30,38,0.86); live backdrop blur requires a background blur effect in Figma.</desc>
+  <defs>
+    <filter id="toolbar-shadow" x="-150%" y="-25%" width="400%" height="160%" color-interpolation-filters="sRGB"><feDropShadow dx="0" dy="7.2" stdDeviation="13.5" flood-color="#000000" flood-opacity="0.45"/></filter>
+    <filter id="selection-shadow" x="-100%" y="-100%" width="300%" height="300%" color-interpolation-filters="sRGB"><feDropShadow dx="0" dy="3.6" stdDeviation="5.4" flood-color="#000000" flood-opacity="0.22"/></filter>
+  </defs>
+  <g id="Toolbar-Dark">
+    <g id="Surface"><rect id="Glass-background" x="0.5" y="0.5" width="37" height="254.8" rx="15.7" fill="#1e1e26" fill-opacity="0.86" stroke="#ffffff" stroke-opacity="0.1" filter="url(#toolbar-shadow)"/>
+      <path id="Inset-top-highlight" d="M1 16.2 A15.2 15.2 0 0 1 16.2 1 H21.8 A15.2 15.2 0 0 1 37 16.2" stroke="#ffffff" stroke-opacity="0.55" stroke-width="0.9"/>
+    </g>
+<g id="Browse-selected" transform="translate(1 1)">
+<rect id="Selected-background" width="36" height="36" rx="10.8" fill="#ffffff" filter="url(#selection-shadow)"/>
+<g id="cursor-icon" transform="translate(9 9) scale(0.75)" fill="none" stroke="#17171f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l7.5 18 2.2-7.3L20 11.5z"/></g>
+</g>
+<g id="Pin" transform="translate(1 37)">
+<g id="pin-icon" transform="translate(9 9) scale(0.75)" fill="none" stroke="#ededf2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.3 7-11a7 7 0 1 0-14 0c0 4.7 7 11 7 11z"/><circle cx="12" cy="10" r="2.4"/></g>
+</g>
+<g id="Highlight-text" transform="translate(1 73)">
+<g id="highlight-icon" transform="translate(9 9) scale(0.75)" fill="none" stroke="#ededf2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l-6 6v3h3l6-6"/><path d="M22 3l-7 7-4-4 7-7z" transform="translate(-2 2)"/><path d="M12.5 6.5l5 5"/></g>
+</g>
+<g id="Rectangle" transform="translate(1 109)">
+<g id="rect-icon" transform="translate(9 9) scale(0.75)" fill="none" stroke="#ededf2" stroke-width="2"><rect x="3.5" y="5.5" width="17" height="13" rx="2"/></g>
+<g id="More-shape-tools"><path id="Chevron" d="M6.5 14.8 L3.5 18 L6.5 21.2" stroke="#9d9da8" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/></g>
+</g>
+<g id="Freehand" transform="translate(1 145)">
+<g id="pen-icon" transform="translate(9 9) scale(0.75)" fill="none" stroke="#ededf2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21c2-1 3.5-2.5 5-5 1.5 2 3 2 4 1s1.5-3 3-3 2 1 3 1"/><path d="M15.5 4.5l4 4L9 19l-5 1 1-5z"/></g>
+</g>
+<g id="Separators"><rect id="Separator-1" x="8.2" y="181" width="21.6" height="0.9" fill="#ffffff" fill-opacity="0.2"/><rect id="Separator-2" x="8.2" y="181.9" width="21.6" height="0.9" fill="#ffffff" fill-opacity="0.2"/></g>
+<g id="Comments" transform="translate(1 182.8)">
+<g id="list-icon" transform="translate(9 9) scale(0.75)" fill="none" stroke="#ededf2" stroke-width="2" stroke-linecap="round"><path d="M8 6h12M8 12h12M8 18h12M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></g>
+</g>
+<g id="Hide-review-tools" transform="translate(1 218.8)">
+<g id="hide-icon" transform="translate(9 9) scale(0.75)" fill="none" stroke="#ededf2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20C5 20 1 12 1 12a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/></g>
+</g>
+</g></svg>

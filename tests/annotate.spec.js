@@ -638,6 +638,7 @@ test.describe('Export / Import', () => {
   });
 
   test('copy button copies the complete export JSON', async ({ page }) => {
+    await page.keyboard.press('a');
     await page.evaluate(() => {
       Object.defineProperty(navigator, 'clipboard', {
         configurable: true,
@@ -1367,6 +1368,7 @@ test.describe('Startup bubble & author config', () => {
     await expect(composer).toHaveClass(/an-show/);
     await composer.locator('textarea').fill('A note');
     await composer.locator('.an-primary').click();
+    await page.keyboard.press('a');
     await expect(page.locator('#__an_panel')).toHaveClass(/an-open/);
 
     await page.locator('#__an_foot .an-footrow button:has-text("Share")').click();
@@ -1644,16 +1646,16 @@ test.describe('Marker keyboard accessibility', () => {
     await pin.focus();
     await expect(pin).toBeFocused();
     await page.keyboard.press('Enter');
-    await expect(page.locator('#__an_panel')).toHaveClass(/an-open/);
-    await expect(page.locator('.an-card.an-active')).toHaveCount(1);
+    await expect(pin).toHaveClass(/an-pin-expanded/);
+    await expect(page.locator('.an-pin-content-text')).toContainText('Keyboard pin');
   });
 
   test('pins are focusable and open their comment with Space', async ({ page }) => {
     const pin = await seedPin(page);
     await pin.focus();
     await page.keyboard.press('Space');
-    await expect(page.locator('#__an_panel')).toHaveClass(/an-open/);
-    await expect(page.locator('.an-card.an-active')).toHaveCount(1);
+    await expect(pin).toHaveClass(/an-pin-expanded/);
+    await expect(page.locator('.an-pin-content-text')).toContainText('Keyboard pin');
   });
 
   test('annotation markers expose accessible names', async ({ page }) => {
@@ -1678,8 +1680,8 @@ test.describe('Marker keyboard accessibility', () => {
     await expect(badge).toHaveCount(1);
     await badge.focus();
     await page.keyboard.press('Enter');
-    await expect(page.locator('#__an_panel')).toHaveClass(/an-open/);
-    await expect(page.locator('.an-card.an-active')).toHaveCount(1);
+    await expect(page.locator('#__an_marker_popover')).toHaveAttribute('role', 'dialog');
+    await expect(page.locator('.an-mp-text')).toContainText('Keyboard shape');
   });
 });
 

@@ -163,17 +163,13 @@
       document.getElementById("__an_unsaved").remove();
     }
   }
-  var COLORS = [
-    { name: "Amber", hex: "#f59e0b" },
-    { name: "Rose", hex: "#f43f5e" },
-    { name: "Violet", hex: "#8b5cf6" },
-    { name: "Sky", hex: "#0ea5e9" },
-    { name: "Emerald", hex: "#10b981" },
-  ];
+  // Annotation color is intentionally automatic and neutral. Keep the saved
+  // `color` field for compatibility with comments created by older versions.
+  var ANNOTATION_COLOR = "#45464d";
 
   var state = {
     tool: "cursor", // cursor | highlight | rect | circle | pin | pen
-    color: store.get("an-color") || COLORS[0].hex,
+    color: ANNOTATION_COLOR,
     author: store.get("an-author") || "",
     // note & share are set by the author via data-note / data-share-email on
     // the embed script — they are static and never edited by the reviewer.
@@ -190,6 +186,27 @@
   // --------------------------------------------------------------------------
   // tiny helpers
   // --------------------------------------------------------------------------
+  // Keep the compact UI density in one place. Page-coordinate geometry stays
+  // in document pixels; only UI-authored lengths and offsets use these helpers.
+  var UI_SCALE = 0.9;
+  var UI_SPACING_SCALE = 0.9;
+  function uiPx(value) { return Math.round(value * UI_SCALE * 100) / 100; }
+  function uiFontPx(value) { return Math.max(10, uiPx(value)); }
+  function scaleUiCss(css) {
+    return css.replace(/(-?(?:\d+|\d*\.\d+))px\b/g, function (match, raw, offset) {
+      var lineStart = css.lastIndexOf("\n", offset - 1) + 1;
+      if (/^\s*@media\b/.test(css.slice(lineStart, offset))) return match;
+      var declarationStart = Math.max(
+        css.lastIndexOf(";", offset - 1), css.lastIndexOf("{", offset - 1), css.lastIndexOf("}", offset - 1)
+      ) + 1;
+      var declaration = css.slice(declarationStart, offset);
+      var isSpacing = /^\s*(?:padding(?:-(?:top|right|bottom|left))?|gap|row-gap|column-gap)\s*:/i.test(declaration);
+      var value = Number(raw) * UI_SCALE * (isSpacing ? UI_SPACING_SCALE : 1);
+      if (/^\s*font(?:-size)?\s*:/i.test(declaration)) value = Math.max(10, value);
+      if (/^\s*border(?:-(?:top|right|bottom|left))?(?:-width)?\s*:/i.test(declaration)) value = Math.max(1, value);
+      return (Math.round(value * 100) / 100) + "px";
+    });
+  }
   function el(tag, attrs, kids) {
     var n = document.createElement(tag);
     if (attrs)
@@ -197,6 +214,7 @@
         if (k === "class") n.className = attrs[k];
         else if (k === "html") n.innerHTML = attrs[k];
         else if (k === "text") n.textContent = attrs[k];
+        else if (k === "style") n.setAttribute(k, scaleUiCss(attrs[k]));
         else if (k.slice(0, 2) === "on")
           listen(n, k.slice(2).toLowerCase(), attrs[k]);
         else n.setAttribute(k, attrs[k]);
@@ -230,15 +248,9 @@
   function truthy(v) {
     return v === true || /^(1|true|yes|open)$/i.test(String(v || ""));
   }
-  function nameHue(name) {
-    var h = 0, s = String(name || "");
-    for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360;
-    return h;
-  }
   function avatarEl(name, size) {
     var a = el("span", { class: "an-avatar", text: initials(name), title: name || "" });
-    a.style.background = "hsl(" + nameHue(name) + " 55% 45%)";
-    if (size) { a.style.width = a.style.height = size + "px"; a.style.fontSize = (size * 0.4) + "px"; }
+    if (size) { a.style.width = a.style.height = uiPx(size) + "px"; a.style.fontSize = uiFontPx(size * 0.4) + "px"; }
     return a;
   }
 
@@ -306,7 +318,7 @@
       type: draft.type || "note",
       author: state.author || "Anonymous",
       text: String(draft.text || "").slice(0, MAX_COMMENT_TEXT),
-      color: draft.color || state.color,
+      color: ANNOTATION_COLOR,
       anchor: draft.anchor || null,
       geom: draft.geom || null,
       resolved: false,
@@ -335,6 +347,7 @@
     if (typeof changes.text === "string") c.text = changes.text.slice(0, MAX_COMMENT_TEXT);
     if (typeof changes.resolved === "boolean") c.resolved = changes.resolved;
     if (typeof changes.color === "string") c.color = changes.color;
+    if (changes.geom && typeof changes.geom === "object") c.geom = JSON.parse(JSON.stringify(changes.geom));
     if (changes.reply) {
       var reply = Object.assign({}, changes.reply, { text: String(changes.reply.text || "").slice(0, MAX_REPLY_TEXT) });
       // Enforce the thread cap at input too — a comment can never grow beyond
@@ -437,6 +450,8 @@
     --an-border-strong: rgba(22,22,34,.16);
     --an-btn-bg: #17171f;
     --an-btn-fg: #ffffff;
+    --an-btn-edge: rgba(255,255,255,.34);
+    --an-btn-depth: 0 2px 4px rgba(0,0,0,.24), inset 0 1px 0 rgba(255,255,255,.18);
     --an-danger: #e11d48;
     --an-ok: #10b981;
     --an-shadow-sm: 0 2px 10px rgba(18,18,32,.10);
@@ -452,8 +467,10 @@
     --an-muted: #9d9da8;
     --an-border: rgba(255,255,255,.10);
     --an-border-strong: rgba(255,255,255,.20);
-    --an-btn-bg: #ededf2;
+    --an-btn-bg: #ffffff;
     --an-btn-fg: #17171f;
+    --an-btn-edge: rgba(23,23,31,.22);
+    --an-btn-depth: 0 2px 4px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.55);
     --an-shadow-sm: 0 2px 10px rgba(0,0,0,.35);
     --an-shadow-md: 0 8px 30px rgba(0,0,0,.45);
     --an-shadow-lg: 0 18px 60px rgba(0,0,0,.55);
@@ -464,39 +481,76 @@
   #__an_sharewrap, #__an_sharewrap *, #__an_launch, #__an_launch *,
   #__an_plus, #__an_plus * { box-sizing: border-box; }
 
-  .an-highlight.an-active { stroke: var(--an-fg); stroke-width: 1; }
+  .an-highlight { stroke: #45464d; stroke-width: 1; filter: drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 2px #17171f); }
+  .an-highlight.an-active { stroke: #45464d; stroke-width: 2; }
 
   #__an_overlay { position: absolute; top:0; left:0; pointer-events:none;
     z-index: 2147483000; overflow: visible; }
-  #__an_overlay .an-hit { pointer-events: stroke; cursor: pointer; }
+  #__an_overlay .an-hit { pointer-events: stroke; cursor: pointer;
+    filter: drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 2px #17171f); }
 
-  .an-pin { position:absolute; width:26px; height:26px; margin:-13px 0 0 -13px;
-    border-radius: 50% 50% 50% 2px; transform: rotate(45deg);
-    display:flex; align-items:center; justify-content:center; cursor:pointer;
-    color:#fff; font:600 12px/1 var(--an-font);
-    box-shadow: 0 4px 14px rgba(0,0,0,.28); z-index: 2147483100;
-    border: 2px solid rgba(255,255,255,.85);
-    transition: transform .15s cubic-bezier(.34,1.56,.64,1);
-    animation: an-drop .25s cubic-bezier(.34,1.56,.64,1); }
-  @keyframes an-drop { from { transform: rotate(45deg) scale(.4); opacity:0 }
-    to { transform: rotate(45deg) scale(1); opacity:1 } }
-  .an-pin span { transform: rotate(-45deg); }
-  .an-pin:hover { transform: rotate(45deg) scale(1.14); }
-  .an-pin.an-active { outline: 3px solid rgba(0,0,0,.18); }
-  .an-pin:focus-visible { outline: 3px solid #4f46e5; outline-offset: 2px; }
+  .an-pin { position:absolute; width:37px; height:26px; margin:0; padding:0; border:0;
+    background:transparent; color:#fff; cursor:pointer; z-index:2147483100;
+    transform-origin:0 50%; touch-action:manipulation; transition:left .22s cubic-bezier(.2,.8,.2,1), width .22s cubic-bezier(.2,.8,.2,1), height .22s cubic-bezier(.2,.8,.2,1), top .22s cubic-bezier(.2,.8,.2,1); }
+  .an-pin-shape { position:absolute; inset:0; width:100%; height:100%; overflow:visible;
+    filter:drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 2px #17171f); pointer-events:none; }
+  .an-pin-shape path { fill:#45464d; stroke:#fff; stroke-width:2; vector-effect:non-scaling-stroke; }
+  .an-pin-count { position:absolute; left:9px; top:50%; width:20px; transform:translateY(-50%);
+    color:#fff; font:600 12px/1 var(--an-font); text-align:center; pointer-events:none; }
+  .an-pin-right .an-pin-count { left:auto; right:9px; }
+  .an-pin-content { position:absolute; display:none; left:43px; right:13px; top:50%;
+    max-height:min(65vh, 430px); overflow:auto; transform:translateY(-50%);
+    color:#fff; text-align:left; font:12px/1.4 var(--an-font); pointer-events:none; }
+  .an-pin-right .an-pin-content { left:13px; right:43px; }
+  .an-pin-expanded:not(.an-pin-preview) .an-pin-content { pointer-events:auto; }
+  .an-pin-expanded .an-pin-content { display:block; }
+  .an-pin-preview .an-pin-content { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .an-pin-preview .an-pin-content-author { display:inline; margin:0; }
+  .an-pin-preview .an-pin-content-author::after { content:": "; }
+  .an-pin-preview .an-pin-content-text { display:inline; white-space:nowrap; }
+  .an-pin-content-author { font-size:11px; font-weight:700; color:rgba(255,255,255,.82); margin-bottom:3px; }
+  .an-pin-content-text { white-space:pre-wrap; overflow-wrap:anywhere; }
+  .an-pin-content-replies { margin-top:8px; padding-top:6px; border-top:1px solid rgba(255,255,255,.25); }
+  .an-pin-content-reply + .an-pin-content-reply { margin-top:5px; }
+  .an-pin-content-reply strong { margin-right:4px; }
+  .an-pin.an-expanded { z-index:2147483350; }
+  .an-pin:focus-visible { outline:3px solid #4f46e5; outline-offset:3px; border-radius:3px; }
   #__an_overlay [tabindex]:focus-visible, .an-block-tab:focus-visible {
     outline: 3px solid #4f46e5; outline-offset: 2px; }
 
   .an-avatar { width:22px; height:22px; border-radius:50%; flex:none;
     display:inline-flex; align-items:center; justify-content:center;
-    color:#fff; font:600 9px/1 var(--an-font); letter-spacing:.02em; }
+    background:var(--an-surface-2); border:1px solid var(--an-border-strong);
+    color:var(--an-fg); font:600 9px/1 var(--an-font); letter-spacing:.02em; }
+
+  #__an_marker_popover { position:fixed; z-index:2147483350; display:none;
+    width:min(300px, calc(100vw - 24px)); overflow:visible;
+    padding:12px; border:1px solid var(--an-border-strong); border-radius:10px;
+    background:var(--an-surface); color:var(--an-fg); font:13px/1.45 var(--an-font);
+    box-shadow:var(--an-shadow-lg); pointer-events:auto; }
+  #__an_marker_popover .an-mp-content { max-height:min(70vh, 520px); overflow:auto; }
+  #__an_marker_popover.an-show { display:block; }
+  #__an_marker_popover.an-preview { width:min(250px, calc(100vw - 24px)); padding:8px 10px;
+    font-size:12px; box-shadow:var(--an-shadow-md); pointer-events:none; }
+  #__an_marker_popover .an-mp-head { display:flex; align-items:center; gap:7px; margin-bottom:7px; }
+  #__an_marker_popover .an-mp-author { min-width:0; flex:1; font-weight:650; }
+  #__an_marker_popover .an-mp-type { color:var(--an-muted); font-size:10px; }
+  #__an_marker_popover .an-mp-close { border:0; background:transparent; color:var(--an-muted);
+    font:20px/1 var(--an-font); cursor:pointer; padding:2px 4px; }
+  #__an_marker_popover .an-mp-text { white-space:pre-wrap; overflow-wrap:anywhere; }
+  #__an_marker_popover .an-mp-replies { margin-top:10px; padding-top:8px; border-top:1px solid var(--an-border); }
+  #__an_marker_popover .an-mp-reply + .an-mp-reply { margin-top:7px; }
+  #__an_marker_popover .an-mp-reply-author { font-weight:600; margin-right:5px; }
+  #__an_marker_popover .an-mp-footer { display:flex; justify-content:flex-end; margin-top:10px; }
+  #__an_marker_popover .an-mp-open { border:0; background:transparent; color:var(--an-muted);
+    font:500 11px var(--an-font); text-decoration:underline; cursor:pointer; padding:3px; }
 
   /* ---- toolbar ----------------------------------------------------------- */
   #__an_bar { position: fixed; bottom: 18px; z-index: 2147483200;
-    display:flex; flex-direction:column; gap:6px; align-items:center;
+    display:flex; flex-direction:column; gap:0; align-items:center;
     background: var(--an-glass); backdrop-filter: blur(16px) saturate(1.5);
     -webkit-backdrop-filter: blur(16px) saturate(1.5);
-    padding: 8px; border-radius: 18px;
+    padding: 0; border-radius: 18px;
     box-shadow: var(--an-shadow-md), 0 1px 0 rgba(255,255,255,.55) inset;
     border: 1px solid var(--an-border);
     font-family: var(--an-font);
@@ -512,11 +566,36 @@
     background: transparent; cursor:pointer; display:flex; align-items:center;
     justify-content:center; color: var(--an-fg); position:relative;
     transition: background .15s, transform .1s, color .15s; }
-  .an-btn:hover { background: rgba(127,127,140,.14); }
+  .an-btn:hover { background: rgba(127,127,140,.08); }
   .an-btn:active { transform: scale(.92); }
   .an-btn.an-on { background: var(--an-btn-bg); color: var(--an-btn-fg);
     box-shadow: 0 4px 12px rgba(0,0,0,.22); }
   .an-btn svg { width:20px; height:20px; }
+  .an-toolgroup { position:relative; }
+  .an-tool-more { position:absolute; top:50%; width:12px; height:24px; transform:translateY(-50%);
+    border:0; border-radius:5px; padding:0; background:transparent; color:var(--an-muted);
+    cursor:pointer; display:flex; align-items:center; justify-content:center; transition:color .15s, background .15s; }
+  #__an_bar.an-right .an-tool-more { left:0; }
+  #__an_bar.an-left .an-tool-more { right:0; }
+  .an-tool-more::after { content:"‹"; font:600 14px/1 var(--an-font); }
+  #__an_bar.an-left .an-tool-more::after { content:"›"; }
+  .an-toolgroup:hover .an-tool-more, .an-tool-more:focus-visible { color:var(--an-fg); background:rgba(127,127,140,.08); }
+  #__an_bar .an-toolgroup.an-toolgroup-active .an-tool-more { color:var(--an-btn-fg); }
+  .an-tool-more:focus-visible { outline:2px solid var(--an-btn-bg); outline-offset:-2px; }
+  .an-tool-menu { position:absolute; top:0; right:calc(100% + 8px); z-index:2;
+    display:none; flex-direction:column; gap:2px; min-width:132px; padding:4px;
+    border:1px solid var(--an-border); border-radius:8px; background:var(--an-glass);
+    color:var(--an-fg); box-shadow:var(--an-shadow-md); backdrop-filter:blur(16px) saturate(1.5);
+    -webkit-backdrop-filter:blur(16px) saturate(1.5); }
+  .an-left .an-tool-menu { right:auto; left:calc(100% + 8px); }
+  .an-tool-menu.an-show { display:flex; }
+  .an-tool-option { width:100%; display:flex; align-items:center; gap:8px; padding:6px 8px;
+    border:0; border-radius:5px; background:transparent; color:inherit;
+    font:500 12px var(--an-font); text-align:left; white-space:nowrap; cursor:pointer; }
+  .an-tool-option:hover, .an-tool-option:focus-visible { background:var(--an-surface-2); outline:none; }
+  .an-tool-option[aria-pressed="true"] { background:var(--an-btn-bg); color:var(--an-btn-fg); }
+  .an-tool-option svg { width:16px; height:16px; flex:none; }
+  .an-tool-option kbd { margin-left:auto; color:var(--an-muted); font:500 10px var(--an-font); }
   .an-btn[data-tip]:hover::after { content: attr(data-tip);
     position:absolute; top:50%; transform:translateY(-50%);
     background:#17171f; color:#fff; font:500 12px var(--an-font); padding:6px 10px;
@@ -524,34 +603,11 @@
     box-shadow: var(--an-shadow-sm); z-index: 5; }
   #__an_bar.an-right .an-btn[data-tip]:hover::after { right:50px; }
   #__an_bar.an-left .an-btn[data-tip]:hover::after { left:50px; }
-  .an-sep { width:24px; height:1px; background: var(--an-border-strong); margin:1px 0; }
+  .an-sep { width:24px; height:1px; background: var(--an-border-strong); margin:0; }
   .an-count { position:absolute; top:-3px; right:-3px; min-width:17px; height:17px;
     padding:0 4px; background:#f43f5e; color:#fff; border-radius:9px;
     font-size:10px; font-weight:700; display:flex; align-items:center;
     justify-content:center; border:2px solid var(--an-surface); }
-
-  /* ---- color picker ------------------------------------------------------ */
-  #__an_colorbtn { width:40px; height:40px; border:none; border-radius:12px;
-    background:transparent; cursor:pointer; display:flex; align-items:center;
-    justify-content:center; position:relative; transition:background .15s; }
-  #__an_colorbtn:hover { background:rgba(127,127,140,.14); }
-  #__an_colorbtn .an-swdot { width:21px; height:21px; border-radius:50%;
-    border:2px solid var(--an-surface);
-    box-shadow:0 1px 4px rgba(0,0,0,.28), 0 0 0 1px var(--an-border); }
-  #__an_colorpop { position:absolute; z-index:2147483210;
-    background: var(--an-glass); backdrop-filter:blur(16px) saturate(1.5);
-    -webkit-backdrop-filter:blur(16px) saturate(1.5);
-    border:1px solid var(--an-border); border-radius:16px; padding:9px;
-    box-shadow: var(--an-shadow-md); display:none; gap:8px; }
-  #__an_bar.an-right #__an_colorpop { right:52px; }
-  #__an_bar.an-left #__an_colorpop { left:52px; }
-  #__an_colorpop.an-show { display:flex; }
-  .an-sw { width:24px; height:24px; border-radius:50%; cursor:pointer;
-    border:2px solid var(--an-surface);
-    box-shadow:0 1px 4px rgba(0,0,0,.25), 0 0 0 1px var(--an-border);
-    transition: transform .12s; }
-  .an-sw:hover { transform: scale(1.18); }
-  .an-sw.an-on { transform: scale(1.18); box-shadow:0 0 0 2px var(--an-btn-bg), 0 1px 4px rgba(0,0,0,.3); }
 
   /* ---- side panel (floating, Figma-style) -------------------------------- */
   #__an_panel { position: fixed; top:12px; right:12px; bottom:12px; width:374px;
@@ -675,6 +731,11 @@
     border:1px solid var(--an-border); padding:13px; font-family: var(--an-font);
     color: var(--an-fg); display:none;
     animation: an-pop .18s cubic-bezier(.34,1.4,.64,1); }
+  #__an_compose.an-pin-compose { width:280px; padding:9px; border-radius:8px;
+    box-shadow:var(--an-shadow-md); animation:an-pop .12s ease-out; }
+  #__an_compose.an-pin-compose .an-cfoot { margin-top:7px; }
+  #__an_compose.an-pin-compose .an-ckbd { font-size:10px; }
+  #__an_compose.an-pin-compose .an-primary { padding:6px 11px; }
   #__an_compose.an-show { display:block; }
   #__an_compose .an-ctitle { font-size:11px; font-weight:700; text-transform:uppercase;
     letter-spacing:.05em; color: var(--an-muted); margin-bottom:9px;
@@ -686,8 +747,12 @@
   #__an_compose .an-cfoot { display:flex; align-items:center; margin-top:10px; gap:7px; }
   #__an_compose .an-ckbd { font-size:10.5px; color: var(--an-muted); margin-right:auto; }
   .an-primary { background: var(--an-btn-bg); color: var(--an-btn-fg); border:none;
-    border-radius:9px; padding:7px 15px; font:600 12.5px var(--an-font); cursor:pointer;
+    border-radius:4px; padding:7px 15px; font:600 12.5px var(--an-font); cursor:pointer;
     transition: filter .15s, opacity .15s; }
+  .an-primary, #__an_namebox button, #__an_sharebox .an-sbtn:not(.an-ghost2) {
+    border:1px solid var(--an-btn-edge); box-shadow:var(--an-btn-depth); }
+  .an-primary:focus-visible, #__an_namebox button:focus-visible,
+  #__an_sharebox .an-sbtn:focus-visible { outline:2px solid var(--an-btn-bg); outline-offset:2px; }
   .an-primary:hover { filter: brightness(1.15); }
   .an-primary:disabled { opacity:.55; cursor:default; }
   .an-ghost { background:transparent; border:1px solid var(--an-border-strong);
@@ -713,7 +778,8 @@
     padding:12px 14px; font:15px var(--an-font); outline:none; margin-bottom:14px; }
   #__an_namebox input:focus { border-color: var(--an-btn-bg); }
   #__an_namebox button { width:100%; background: var(--an-btn-bg); color: var(--an-btn-fg);
-    border:none; border-radius:11px; padding:12px; font:600 14px var(--an-font);
+    border:1px solid var(--an-btn-edge); border-radius:4px; padding:12px;
+    box-shadow:var(--an-btn-depth); font:600 14px var(--an-font);
     cursor:pointer; transition: filter .15s; }
   #__an_namebox button:hover { filter: brightness(1.15); }
   #__an_namebox .an-nnote { background: var(--an-surface-2);
@@ -749,7 +815,7 @@
   #__an_sharebox .an-srow { display:flex; gap:8px; flex-wrap:wrap; margin-top:9px; }
   #__an_sharebox .an-sbtn { display:inline-flex; align-items:center; gap:6px;
     background: var(--an-btn-bg); color: var(--an-btn-fg); border:none;
-    border-radius:9px; padding:8px 13px; font:600 13px var(--an-font);
+    border-radius:4px; padding:8px 13px; font:600 13px var(--an-font);
     cursor:pointer; transition: filter .15s; }
   #__an_sharebox .an-sbtn.an-ghost2 { background: var(--an-surface-2);
     color: var(--an-fg); border:1px solid var(--an-border-strong); }
@@ -830,11 +896,12 @@
   .an-block-tab { position:absolute; z-index:2147483100; min-width:24px; height:24px;
     padding:0 7px; border-radius:13px; display:flex; align-items:center; gap:5px;
     color:#fff; font:600 12px/1 var(--an-font); cursor:pointer;
-    box-shadow: var(--an-shadow-sm); pointer-events:auto;
+    border:2px solid #fff; box-shadow:0 0 0 1px #17171f, var(--an-shadow-sm); pointer-events:auto;
     transition:transform .12s; }
   .an-block-tab:hover { transform:scale(1.06); }
   .an-block-tab.an-active { outline:3px solid rgba(0,0,0,.14); }
   .an-block-tab svg { width:13px; height:13px; }
+  .an-badge-circle { filter:drop-shadow(0 0 1px #17171f); }
 
   /* ---- off-mode launcher -------------------------------------------------- */
   #__an_launch { position:fixed; bottom:24px; z-index:2147483200;
@@ -885,11 +952,11 @@
     #__an_panel.an-open { transform: translateY(0); }
     #__an_root.an-popen #__an_bar { display:none; }
     #__an_compose { width: min(304px, calc(100vw - 16px)); }
+    #__an_compose.an-pin-compose { width:min(280px, calc(100vw - 16px)); }
     .an-btn[data-tip]:hover::after { display:none; }
     #__an_hint { font-size:11px; padding:7px 12px; }
-    #__an_bar { padding:6px; gap:4px; }
+    #__an_bar { padding:0; gap:0; }
     .an-btn { width:36px; height:36px; }
-    #__an_colorbtn { width:36px; height:36px; }
     #__an_panel .an-list { -webkit-overflow-scrolling: touch; }
     .an-ph { padding:14px 14px 10px; }
     #__an_foot .an-footrow { flex-wrap:wrap; }
@@ -1072,7 +1139,7 @@
     }
     return true;
   }
-  function paintRange(range, color, id) {
+  function paintRange(range, id) {
     ensureOverlay();
     var fragments = [];
 
@@ -1087,8 +1154,8 @@
         if (!r.width || !r.height) return;
         var mark = svgEl("rect", { class: "an-highlight", "data-an": id,
           x: r.left + window.scrollX, y: r.top + window.scrollY,
-          width: r.width, height: r.height, rx: 2,
-          fill: hexA(/^#[0-9a-f]{6}$/i.test(color) ? color : "#f59e0b", 0.32) });
+          width: r.width, height: r.height, rx: uiPx(2),
+          fill: hexA(ANNOTATION_COLOR, 0.26) });
         mark.style.pointerEvents = "none";
         overlay.appendChild(mark); fragments.push(mark);
       });
@@ -1208,18 +1275,313 @@
 
   function showResolvedVisuals() { return state.filter !== "open"; }
 
+  var markerDrag = null, suppressedMarkerClick = null;
+  function beginMarkerDrag(e, c, kind, node, visuals) {
+    if (markerDrag || e.isPrimary === false || (e.pointerType === "mouse" && e.button !== 0)) return;
+    var anchorEl = c.geom.selector ? resolveAnchorEl(c.geom.selector) : null;
+    if (!anchorEl && kind === "pin" && c.geom.selector === "body") anchorEl = document.body;
+    if (!anchorVisible(anchorEl)) return;
+    markerDrag = {
+      id: c.id, kind: kind, node: node, visuals: visuals, pointerId: e.pointerId,
+      startX: e.pageX, startY: e.pageY, box: docBox(anchorEl),
+      geom: JSON.parse(JSON.stringify(c.geom)), moved: false,
+    };
+    if (node.setPointerCapture && e.pointerId != null)
+      try { node.setPointerCapture(e.pointerId); } catch (ex) {}
+    e.stopPropagation();
+  }
+  function suppressMarkerClick(id) {
+    if (suppressedMarkerClick && suppressedMarkerClick.id === id && suppressedMarkerClick.until > performance.now()) {
+      suppressedMarkerClick = null;
+      return true;
+    }
+    return false;
+  }
+  function moveMarkerDrag(e) {
+    var d = markerDrag;
+    if (!d || (d.pointerId != null && e.pointerId !== d.pointerId)) return;
+    var dx = e.pageX - d.startX, dy = e.pageY - d.startY;
+    if (!d.moved && Math.sqrt(dx * dx + dy * dy) < 4) return;
+    d.moved = true;
+    e.preventDefault();
+    if (d.kind === "pin") {
+      d.node.style.left = (d.box.x + d.geom.x * d.box.w + dx) + "px";
+      d.node.style.top = (d.box.y + d.geom.y * d.box.h + dy) + "px";
+    } else {
+      var transform = "translate(" + dx + " " + dy + ")";
+      d.visuals.forEach(function (visual) { visual.setAttribute("transform", transform); });
+    }
+  }
+  function finishMarkerDrag(e, commit) {
+    var d = markerDrag;
+    if (!d || (d.pointerId != null && e.pointerId !== d.pointerId)) return;
+    markerDrag = null;
+    if (!d.moved) return;
+    if (!commit) { renderAll(); return; }
+    var dx = e.pageX - d.startX, dy = e.pageY - d.startY;
+    var geom = d.geom;
+    if (d.kind === "pin") {
+      geom.x = clamp01(geom.x + dx / d.box.w);
+      geom.y = clamp01(geom.y + dy / d.box.h);
+    } else {
+      geom.points = geom.points.map(function (point) { return [point[0] + dx / d.box.w, point[1] + dy / d.box.h]; });
+    }
+    var clickGuard = { id: d.id, until: performance.now() + 500 };
+    suppressedMarkerClick = clickGuard;
+    setTimeout(function () { if (suppressedMarkerClick === clickGuard) suppressedMarkerClick = null; }, 0);
+    var updated = patchComment(d.id, { geom: geom });
+    if (updated) { mergeComment(updated); renderAll(); renderPanel(); }
+    else renderAll();
+  }
+
   // Make a DOM or SVG marker keyboard-operable: focusable, announced by name,
   // and activated with Enter / Space (mirrors the mouse click). Returns nothing.
   function makeMarkerInteractive(node, c, idx, verb) {
     node.setAttribute("role", "button");
     node.setAttribute("tabindex", "0");
+    node.setAttribute("aria-haspopup", "dialog");
     node.setAttribute("aria-label", (verb || "Annotation") + " comment #" + idx +
       ": " + (c.text || "no text").slice(0, 120));
+    listen(node, "pointerenter", function (ev) {
+      if (ev.pointerType === "touch") return;
+      clearMarkerPopoverHide();
+      if (markerPopoverMode === "full" || markerPopoverMode === "pin-full") return;
+      if (markerPreviewTimer) clearTimeout(markerPreviewTimer);
+      markerPreviewTimer = setTimeout(function () {
+        if (c.type === "pin" && node.classList.contains("an-pin")) showPinExpansion(c, node, "preview");
+        else showMarkerPopover(c.id, node, "preview");
+      }, 300);
+    });
+    listen(node, "pointerleave", scheduleMarkerPopoverHide);
+    listen(node, "focus", function () {
+      if (suppressMarkerFocusPreview) { suppressMarkerFocusPreview = false; return; }
+      if (c.type === "pin" && node.classList.contains("an-pin")) showPinExpansion(c, node, "preview");
+      else showMarkerPopover(c.id, node, "preview");
+    });
+    listen(node, "blur", scheduleMarkerPopoverHide);
     listen(node, "keydown", function (ev) {
       if (ev.key === "Enter" || ev.key === " " || ev.key === "Spacebar") {
-        ev.preventDefault(); ev.stopPropagation(); focusComment(c.id, true);
+        ev.preventDefault(); ev.stopPropagation();
+        if (c.type === "pin" && node.classList.contains("an-pin")) showPinExpansion(c, node, "full");
+        else showMarkerPopover(c.id, node, "full");
+        var close = c.type === "pin" && node.classList.contains("an-pin") ? null : markerPopover && markerPopover.querySelector(".an-mp-close");
+        if (close) close.focus();
       }
     });
+  }
+
+  var markerPopover = null, markerPopoverAnchor = null;
+  var expandedPin = null;
+  var markerPopoverMode = "", markerPreviewTimer = null, markerPopoverHideTimer = null;
+  var suppressMarkerFocusPreview = false;
+  function ensureMarkerPopover() {
+    if (markerPopover) return markerPopover;
+    markerPopover = el("div", { id: "__an_marker_popover" });
+    ensureHost().appendChild(markerPopover);
+    listen(markerPopover, "pointerenter", clearMarkerPopoverHide);
+    listen(markerPopover, "pointerleave", scheduleMarkerPopoverHide);
+    listen(document, "pointerdown", function (ev) {
+      if (markerPopover && markerPopover.classList.contains("an-show") && markerPopoverMode === "full" &&
+          !markerPopover.contains(ev.target) && !(markerPopoverAnchor && markerPopoverAnchor.contains(ev.target)))
+        closeMarkerPopover();
+      else if (expandedPin && markerPopoverMode === "pin-full" && !expandedPin.contains(ev.target))
+        closeMarkerPopover();
+    });
+    listen(document, "keydown", function (ev) {
+      if (ev.key === "Escape" && ((markerPopover && markerPopover.classList.contains("an-show")) || expandedPin)) {
+        ev.stopPropagation(); closeMarkerPopover(true);
+      }
+    });
+    listen(window, "resize", positionMarkerPopover);
+    listen(window, "scroll", positionMarkerPopover, true);
+    return markerPopover;
+  }
+  function clearMarkerPopoverHide() {
+    if (markerPopoverHideTimer) { clearTimeout(markerPopoverHideTimer); markerPopoverHideTimer = null; }
+  }
+  function scheduleMarkerPopoverHide() {
+    if (markerPreviewTimer) { clearTimeout(markerPreviewTimer); markerPreviewTimer = null; }
+    clearMarkerPopoverHide();
+    if (markerPopoverMode !== "preview" && markerPopoverMode !== "pin-preview") return;
+    markerPopoverHideTimer = setTimeout(function () { closeMarkerPopover(); }, 180);
+  }
+  function positionMarkerPopover() {
+    if (expandedPin && expandedPin.isConnected) {
+      var maxWidth = uiPx(320);
+      var room = setPinDirection(expandedPin, maxWidth);
+      var width = Math.min(maxWidth, room);
+      setPinGeometry(expandedPin, width, expandedPin.offsetHeight || uiPx(46));
+    }
+    if (!markerPopover || !markerPopover.classList.contains("an-show") || !markerPopoverAnchor) return;
+    if (!markerPopoverAnchor.isConnected) { closeMarkerPopover(); return; }
+    var rect = markerPopoverAnchor.getBoundingClientRect();
+    var width = markerPopover.offsetWidth, height = markerPopover.offsetHeight, gap = 10;
+    var left = rect.right + gap, opensLeft = false;
+    if (left + width > window.innerWidth - 8) { left = rect.left - width - gap; opensLeft = true; }
+    left = Math.max(8, Math.min(left, window.innerWidth - width - 8));
+    var top = rect.top + Math.min(rect.height / 2, 18) - Math.min(height / 3, 80);
+    top = Math.max(8, Math.min(top, window.innerHeight - height - 8));
+    markerPopover.style.left = left + "px";
+    markerPopover.style.top = top + "px";
+  }
+  function closeMarkerPopover(returnFocus) {
+    if (markerPreviewTimer) { clearTimeout(markerPreviewTimer); markerPreviewTimer = null; }
+    clearMarkerPopoverHide();
+    if (markerPopover) markerPopover.classList.remove("an-show", "an-preview");
+    var anchor = markerPopoverAnchor;
+    if (anchor) { anchor.removeAttribute("aria-describedby"); anchor.setAttribute("aria-expanded", "false"); }
+    if (expandedPin) {
+      expandedPin.classList.remove("an-pin-expanded", "an-pin-preview", "an-expanded");
+      expandedPin.style.width = uiPx(37) + "px";
+      expandedPin.style.height = uiPx(26) + "px";
+      expandedPin.style.top = (expandedPin.__anchorY - uiPx(13)) + "px";
+      expandedPin.style.left = (expandedPin.__anchorX - (expandedPin.__expandLeft ? uiPx(37) : 0)) + "px";
+      expandedPin.style.zIndex = "2147483100";
+      expandedPin.__svg.setAttribute("viewBox", "0 0 " + uiPx(37) + " " + uiPx(26));
+      expandedPin.__path.setAttribute("d", sidePinPath(uiPx(37), uiPx(26), expandedPin.__expandLeft));
+      expandedPin.__content.innerHTML = "";
+      expandedPin.setAttribute("aria-expanded", "false");
+      expandedPin = null;
+    }
+    markerPopoverAnchor = null; markerPopoverMode = "";
+    if (returnFocus && anchor && anchor.isConnected) {
+      suppressMarkerFocusPreview = true;
+      anchor.focus();
+      setTimeout(function () { suppressMarkerFocusPreview = false; }, 0);
+    }
+  }
+  function sidePinPath(width, height, pointRight) {
+    var r = Math.min(height * .48, 14);
+    var tail = Math.min(height * .55, 18);
+    if (pointRight) return "M" + width + " " + (height / 2) +
+      " C" + (width - tail * .25) + " " + (height * .31) + " " + (width - tail * .48) + " 0 " + (width - tail) + " 0"+
+      " H" + r + " Q0 0 0 " + r +
+      " V" + (height - r) + " Q0 " + height + " " + r + " " + height +
+      " H" + (width - tail) +
+      " C" + (width - tail * .48) + " " + height + " " + (width - tail * .25) + " " + (height * .69) + " " + width + " " + (height / 2) + " Z";
+    return "M0 " + (height / 2) +
+      " C" + (tail * .25) + " " + (height * .31) + " " + (tail * .48) + " 0 " + tail + " 0"+
+      " H" + (width - r) + " Q" + width + " 0 " + width + " " + r +
+      " V" + (height - r) + " Q" + width + " " + height + " " + (width - r) + " " + height +
+      " H" + tail +
+      " C" + (tail * .48) + " " + height + " " + (tail * .25) + " " + (height * .69) + " 0 " + (height / 2) + " Z";
+  }
+  function setPinDirection(pin, maxWidth) {
+    var x = pin.__anchorX - window.scrollX;
+    var roomRight = window.innerWidth - x - 12;
+    var roomLeft = x - 12;
+    pin.__expandLeft = roomRight < maxWidth && roomLeft > roomRight;
+    pin.classList.toggle("an-pin-right", pin.__expandLeft);
+    return Math.max(uiPx(37), pin.__expandLeft ? roomLeft : roomRight);
+  }
+  function setPinGeometry(pin, width, height) {
+    pin.style.width = width + "px";
+    pin.style.height = height + "px";
+    pin.style.top = (pin.__anchorY - height / 2) + "px";
+    pin.style.left = (pin.__anchorX - (pin.__expandLeft ? width : 0)) + "px";
+    pin.__svg.setAttribute("viewBox", "0 0 " + width + " " + height);
+    pin.__path.setAttribute("d", sidePinPath(width, height, pin.__expandLeft));
+  }
+  function showPinExpansion(c, pin, mode) {
+    if (!c || !pin || !pin.isConnected) return;
+    if (markerPreviewTimer) { clearTimeout(markerPreviewTimer); markerPreviewTimer = null; }
+    var pop = ensureMarkerPopover();
+    pop.classList.remove("an-show", "an-preview");
+    pop.innerHTML = "";
+    if (expandedPin && expandedPin !== pin) closeMarkerPopover();
+    if (markerPopoverAnchor && markerPopoverAnchor !== pin) {
+      markerPopoverAnchor.removeAttribute("aria-describedby");
+      markerPopoverAnchor.setAttribute("aria-expanded", "false");
+    }
+    markerPopoverAnchor = pin; markerPopoverMode = mode === "preview" ? "pin-preview" : "pin-full";
+    expandedPin = pin;
+    pin.setAttribute("aria-expanded", mode === "preview" ? "false" : "true");
+    pin.classList.add("an-pin-expanded");
+    pin.classList.toggle("an-pin-preview", mode === "preview");
+    pin.classList.add("an-expanded");
+    pin.style.zIndex = "2147483350";
+    var available = setPinDirection(pin, uiPx(320));
+    var width = Math.min(uiPx(mode === "preview" ? 250 : 320), available);
+    setPinGeometry(pin, width, uiPx(46));
+    var content = pin.__content;
+    content.innerHTML = "";
+    content.style.maxHeight = "min(65vh, 430px)";
+    content.appendChild(el("div", { class: "an-pin-content-author", text: c.author || "Anonymous" }));
+    var text = String(c.text || "");
+    if (mode === "preview") {
+      text = text.replace(/\s+/g, " ").trim();
+      if (text.length > 112) text = text.slice(0, 109).trimEnd() + "…";
+    }
+    content.appendChild(el("div", { class: "an-pin-content-text", text: text || "No comment" }));
+    if (mode !== "preview" && c.replies && c.replies.length) {
+      var replies = el("div", { class: "an-pin-content-replies" });
+      c.replies.forEach(function (reply) {
+        replies.appendChild(el("div", { class: "an-pin-content-reply" }, [
+          el("strong", { text: (reply.author || "Anonymous") + ":" }),
+          document.createTextNode(reply.text || ""),
+        ]));
+      });
+      content.appendChild(replies);
+    }
+    var height;
+    if (mode === "preview") height = uiPx(46);
+    else {
+      height = Math.min(Math.max(uiPx(68), content.scrollHeight + uiPx(20)), Math.min(window.innerHeight * .7, uiPx(450)));
+      content.style.maxHeight = Math.max(uiPx(48), height - uiPx(20)) + "px";
+    }
+    setPinGeometry(pin, width, height);
+  }
+  function showMarkerPopover(id, anchor, mode) {
+    if (markerPreviewTimer) { clearTimeout(markerPreviewTimer); markerPreviewTimer = null; }
+    var c = state.comments.find(function (comment) { return comment.id === id; });
+    if (!c || !anchor || !anchor.isConnected) return;
+    if (c.type === "pin" && anchor.classList && anchor.classList.contains("an-pin")) { showPinExpansion(c, anchor, mode); return; }
+    if (expandedPin) closeMarkerPopover();
+    var pop = ensureMarkerPopover();
+    if (markerPopoverAnchor && markerPopoverAnchor !== anchor) {
+      markerPopoverAnchor.removeAttribute("aria-describedby");
+      markerPopoverAnchor.setAttribute("aria-expanded", "false");
+    }
+    markerPopoverAnchor = anchor; markerPopoverMode = mode;
+    anchor.setAttribute("aria-expanded", mode === "full" ? "true" : "false");
+    if (mode !== "preview") anchor.removeAttribute("aria-describedby");
+    pop.innerHTML = "";
+    var content = el("div", { class: "an-mp-content" });
+    pop.classList.toggle("an-preview", mode === "preview");
+    pop.setAttribute("role", mode === "preview" ? "tooltip" : "dialog");
+    pop.setAttribute("aria-label", mode === "preview" ? "Comment preview" : "Comment by " + (c.author || "Anonymous"));
+    if (mode === "preview") {
+      anchor.setAttribute("aria-describedby", pop.id);
+      var text = String(c.text || "").replace(/\s+/g, " ").trim();
+      if (text.length > 120) text = text.slice(0, 117).trimEnd() + "…";
+      content.textContent = (c.author || "Anonymous") + (text ? ": " + text : " left a comment");
+    } else {
+      var close = el("button", { class: "an-mp-close", type: "button", text: "×", title: "Close", "aria-label": "Close comment" });
+      listen(close, "click", function () { closeMarkerPopover(true); });
+      content.appendChild(el("div", { class: "an-mp-head" }, [
+        avatarEl(c.author),
+        el("span", { class: "an-mp-author", text: c.author || "Anonymous" }),
+        el("span", { class: "an-mp-type", text: TYPE_LABEL[c.type] || "Comment" }),
+        close,
+      ]));
+      content.appendChild(el("div", { class: "an-mp-text", text: c.text || "" }));
+      if (c.replies && c.replies.length) {
+        var replies = el("div", { class: "an-mp-replies" });
+        c.replies.forEach(function (reply) {
+          replies.appendChild(el("div", { class: "an-mp-reply" }, [
+            el("span", { class: "an-mp-reply-author", text: (reply.author || "Anonymous") + ":" }),
+            document.createTextNode(reply.text || ""),
+          ]));
+        });
+        content.appendChild(replies);
+      }
+      var open = el("button", { class: "an-mp-open", type: "button", text: "Open all comments" });
+      listen(open, "click", function () { closeMarkerPopover(); focusComment(c.id, true); });
+      content.appendChild(el("div", { class: "an-mp-footer" }, [open]));
+    }
+    pop.appendChild(content);
+    pop.classList.add("an-show");
+    positionMarkerPopover();
   }
 
   // Count full occurrences of a needle in the page text. Overlapping matches
@@ -1267,16 +1629,17 @@
     var pill = el("div", { class: "an-unanchored-pill", title: "The quoted text for comment #" + idx +
       " can’t be found (or appears multiple times), so it isn’t highlighted. Open the comment for details." },
       [el("span", { html: ICONS.alert }), el("span", { text: "Moved or duplicated — #" + idx })]);
-    pill.style.top = (16 + slot * 34 + window.scrollY) + "px";
-    pill.style.left = "16px";
+    pill.style.top = (uiPx(16) + slot * uiPx(34) + window.scrollY) + "px";
+    pill.style.left = uiPx(16) + "px";
     pill.style.pointerEvents = "auto";
-    listen(pill, "click", function (ev) { ev.stopPropagation(); focusComment(c.id, true); });
+    listen(pill, "click", function (ev) { ev.stopPropagation(); showMarkerPopover(c.id, pill, "full"); });
     makeMarkerInteractive(pill, c, idx, "Unanchored note");
     pinLayer.appendChild(pill);
   }
 
   function renderAll() {
     if (destroyed || !booted || drawing || pendingDraft) return;
+    if (expandedPin) closeMarkerPopover();
     ensureOverlay();
     if (!state.enabled) { clearVisuals(); updateCount(); return; }
     clearVisuals();
@@ -1300,10 +1663,10 @@
         c.__unanchored = false;
         var r = rangeFromQuote(c.anchor, resolved.legacy);
         if (r) {
-          var marks = paintRange(r, c.color, c.id);
+          var marks = paintRange(r, c.id);
           marks.forEach(function (m) {
             listen(m, "click", function (ev) {
-              ev.stopPropagation(); focusComment(c.id, true);
+              ev.stopPropagation(); showMarkerPopover(c.id, m, "full");
             });
             makeMarkerInteractive(m, c, state.comments.indexOf(c) + 1, "Highlight");
             if (c.id === state.activeId) m.classList.add("an-active");
@@ -1339,14 +1702,13 @@
     var tab = el("div", { class: "an-block-tab" + (c.id === state.activeId ? " an-active" : "") }, [
       el("span", { html: ICONS.bubble }), el("span", { text: String(idx) }),
     ]);
-    tab.style.background = c.color;
+    tab.style.background = ANNOTATION_COLOR;
     var docW = Math.max(document.documentElement.scrollWidth, window.innerWidth);
-    var rightGap = box.x + box.w + 14;
-    if (rightGap > docW - 40) rightGap = box.x + box.w - 30;
+    var rightGap = box.x + box.w + uiPx(14);
+    if (rightGap > docW - uiPx(40)) rightGap = box.x + box.w - uiPx(30);
     tab.style.left = rightGap + "px";
-    tab.style.top = (box.y + 2) + "px";
-    tab.title = c.text || "";
-    listen(tab, "click", function (ev) { ev.stopPropagation(); focusComment(c.id, true); });
+    tab.style.top = (box.y + uiPx(2)) + "px";
+    listen(tab, "click", function (ev) { ev.stopPropagation(); showMarkerPopover(c.id, tab, "full"); });
     makeMarkerInteractive(tab, c, idx, "Section");
     pinLayer.appendChild(tab);
   }
@@ -1371,15 +1733,15 @@
     if (g.kind === "rect") {
       node = svgEl("rect", {
         x: box.x + g.x * box.w, y: box.y + g.y * box.h,
-        width: g.w * box.w, height: g.h * box.h, rx: 6,
-        fill: hexA(c.color, 0.08), stroke: c.color, "stroke-width": 2.5,
+        width: g.w * box.w, height: g.h * box.h, rx: uiPx(6),
+        fill: hexA(ANNOTATION_COLOR, 0.08), stroke: ANNOTATION_COLOR, "stroke-width": uiPx(2.5),
         class: "an-hit",
       });
     } else if (g.kind === "circle") {
       node = svgEl("ellipse", {
         cx: box.x + (g.x + g.w / 2) * box.w, cy: box.y + (g.y + g.h / 2) * box.h,
         rx: Math.abs(g.w / 2) * box.w, ry: Math.abs(g.h / 2) * box.h,
-        fill: hexA(c.color, 0.07), stroke: c.color, "stroke-width": 2.5,
+        fill: hexA(ANNOTATION_COLOR, 0.07), stroke: ANNOTATION_COLOR, "stroke-width": uiPx(2.5),
         class: "an-hit",
       });
     } else if (g.kind === "pen") {
@@ -1387,25 +1749,25 @@
         return (i ? "L" : "M") + (box.x + p[0] * box.w).toFixed(1) + " " + (box.y + p[1] * box.h).toFixed(1);
       }).join(" ");
       node = svgEl("path", {
-        d: d, fill: "none", stroke: c.color, "stroke-width": 3,
+        d: d, fill: "none", stroke: ANNOTATION_COLOR, "stroke-width": uiPx(3),
         "stroke-linecap": "round", "stroke-linejoin": "round", class: "an-hit",
       });
     }
     if (!node) return;
-    if (c.id === state.activeId) node.setAttribute("stroke-width", 4);
+    if (c.id === state.activeId) node.setAttribute("stroke-width", uiPx(4));
     node.style.cursor = "pointer";
-    listen(node, "click", function (ev) { ev.stopPropagation(); focusComment(c.id, true); });
+    listen(node, "click", function (ev) { ev.stopPropagation(); showMarkerPopover(c.id, node, "full"); });
     overlay.appendChild(node);
     var fx = g.kind === "pen" ? g.points[0][0] : g.x;
     var fy = g.kind === "pen" ? g.points[0][1] : g.y;
     var bx = box.x + fx * box.w, by = box.y + fy * box.h;
     var idx = state.comments.indexOf(c) + 1;
     var badge = svgEl("g", {});
-    var badgeR = viewportMismatch(g) ? 13 : 11;
-    var badgeFill = viewportMismatch(g) ? "#f59e0b" : c.color;
-    var circ = svgEl("circle", { cx: bx, cy: by, r: badgeR, fill: badgeFill, stroke: "#fff", "stroke-width": 2 });
-    var txt = svgEl("text", { x: bx, y: by + 4, "text-anchor": "middle", fill: "#fff",
-      "font-size": "11", "font-weight": "700", "font-family": "Inter, sans-serif" });
+    var badgeR = uiPx(viewportMismatch(g) ? 13 : 11);
+    var badgeFill = ANNOTATION_COLOR;
+    var circ = svgEl("circle", { cx: bx, cy: by, r: badgeR, fill: badgeFill, stroke: "#fff", "stroke-width": uiPx(2), class: "an-badge-circle" });
+    var txt = svgEl("text", { x: bx, y: by + uiPx(4), "text-anchor": "middle", fill: "#fff",
+      "font-size": String(uiFontPx(11)), "font-weight": "700", "font-family": "Inter, sans-serif" });
     txt.textContent = viewportMismatch(g) ? "⚠" : idx;
     if (viewportMismatch(g)) {
       var badgeTitle = svgEl("title");
@@ -1415,7 +1777,11 @@
     badge.appendChild(circ); badge.appendChild(txt);
     badge.style.cursor = "pointer";
     badge.style.pointerEvents = "all";
-    listen(badge, "click", function (ev) { ev.stopPropagation(); focusComment(c.id, true); });
+    listen(badge, "click", function (ev) { ev.stopPropagation(); if (!suppressMarkerClick(c.id)) showMarkerPopover(c.id, badge, "full"); });
+    if (g.kind === "pen") {
+      badge.style.touchAction = "none";
+      listen(badge, "pointerdown", function (ev) { beginMarkerDrag(ev, c, "pen", badge, [node, badge]); });
+    }
     makeMarkerInteractive(badge, c, idx, "Shape");
     overlay.appendChild(badge);
   }
@@ -1425,21 +1791,21 @@
   // the annotation still has a valid position).
   function renderMissingAnchor(c, missingSlot) {
     var idx = state.comments.indexOf(c) + 1;
-    var badgeR = 13;
-    var bx = 40 + missingSlot * 36;
-    var by = 40 + window.scrollY;
+    var badgeR = uiPx(13);
+    var bx = uiPx(40) + missingSlot * uiPx(36);
+    var by = uiPx(40) + window.scrollY;
     var badge = svgEl("g", {});
-    var circ = svgEl("circle", { cx: bx, cy: by, r: badgeR, fill: "#f59e0b", stroke: "#fff", "stroke-width": 2, class: "an-badge-circle" });
+    var circ = svgEl("circle", { cx: bx, cy: by, r: badgeR, fill: ANNOTATION_COLOR, stroke: "#fff", "stroke-width": uiPx(2), class: "an-badge-circle" });
     var title = svgEl("title");
     title.textContent = "The element this comment points to no longer exists — it is not drawn in place.";
     circ.setAttribute("title", "Anchor element missing");
-    var txt = svgEl("text", { x: bx, y: by + 4, "text-anchor": "middle", fill: "#fff",
-      "font-size": "11", "font-weight": "700", "font-family": "Inter, sans-serif" });
+    var txt = svgEl("text", { x: bx, y: by + uiPx(4), "text-anchor": "middle", fill: "#fff",
+      "font-size": String(uiFontPx(11)), "font-weight": "700", "font-family": "Inter, sans-serif" });
     txt.textContent = idx;
     badge.appendChild(title); badge.appendChild(circ); badge.appendChild(txt);
     badge.style.cursor = "pointer";
     badge.style.pointerEvents = "all";
-    listen(badge, "click", function (ev) { ev.stopPropagation(); focusComment(c.id, true); });
+    listen(badge, "click", function (ev) { ev.stopPropagation(); showMarkerPopover(c.id, badge, "full"); });
     makeMarkerInteractive(badge, c, idx, "Annotation (anchor missing)");
     overlay.appendChild(badge);
   }
@@ -1453,13 +1819,30 @@
     var box = docBox(anchorEl);
     rememberAnchor(c, box);
     var idx = state.comments.indexOf(c) + 1;
-    var pin = el("div", { class: "an-pin" + (c.id === state.activeId ? " an-active" : ""), title: c.text || "" },
-      [el("span", { text: String(idx) })]);
-    pin.style.background = c.color;
-    pin.style.left = (box.x + c.geom.x * box.w) + "px";
-    pin.style.top = (box.y + c.geom.y * box.h) + "px";
+    var anchorX = box.x + c.geom.x * box.w;
+    var anchorY = box.y + c.geom.y * box.h;
+    var pinSvg = svgEl("svg", { class: "an-pin-shape", viewBox: "0 0 " + uiPx(37) + " " + uiPx(26), preserveAspectRatio: "none", "aria-hidden": "true" });
+    var pinPath = svgEl("path", { d: sidePinPath(uiPx(37), uiPx(26), false) });
+    pinSvg.appendChild(pinPath);
+    var pinContent = el("div", { class: "an-pin-content" });
+    listen(pinContent, "click", function (ev) { ev.stopPropagation(); });
+    var pin = el("div", { class: "an-pin" + (c.id === state.activeId ? " an-active" : "") }, [
+      pinSvg,
+      el("span", { class: "an-pin-count", text: String(idx) }),
+      pinContent,
+    ]);
+    pin.__anchorX = anchorX; pin.__anchorY = anchorY;
+    pin.__svg = pinSvg; pin.__path = pinPath; pin.__content = pinContent;
+    var initialRoom = setPinDirection(pin, uiPx(320));
+    var initialWidth = Math.min(uiPx(37), initialRoom);
+    setPinGeometry(pin, initialWidth, uiPx(26));
     pin.style.pointerEvents = "auto";
-    listen(pin, "click", function (ev) { ev.stopPropagation(); focusComment(c.id, true); });
+    listen(pin, "click", function (ev) {
+      ev.stopPropagation();
+      if (suppressMarkerClick(c.id)) return;
+      if (expandedPin === pin && markerPopoverMode === "pin-full") closeMarkerPopover();
+      else showPinExpansion(c, pin, "full");
+    });
     makeMarkerInteractive(pin, c, idx, "Pin");
     pinLayer.appendChild(pin);
   }
@@ -1482,9 +1865,11 @@
     ensureComposer();
     composerShownAt = performance.now();
     pendingDraft = draft;
+    var pinComposer = draft.type === "pin";
+    composer.classList.toggle("an-pin-compose", pinComposer);
     var label = { highlight: "Highlight", shape: draft.geom && draft.geom.kind === "circle" ? "Circle" : "Rectangle", pin: "Pin", pen: "Sketch", block: "Section" }[draft.type] || "Note";
     composer.innerHTML = "";
-    composer.appendChild(el("div", { class: "an-ctitle" }, [
+    if (!pinComposer) composer.appendChild(el("div", { class: "an-ctitle" }, [
       swatchDot(draft.color), document.createTextNode(label + " comment"),
       state.author ? (function () {
         var w = el("span", { style: "margin-left:auto" });
@@ -1494,31 +1879,33 @@
     ]));
     if (draft.anchor && draft.anchor.exact)
       composer.appendChild(el("div", { class: "an-cquote", text: draft.anchor.exact }));
-    var ta = el("textarea", { class: "an-ta", rows: "3", placeholder: "Write your review…" });
+    var ta = el("textarea", { class: "an-ta", rows: pinComposer ? "1" : "3",
+      placeholder: pinComposer ? "Write a comment…" : "Write your review…" });
     composer.appendChild(ta);
-    var save = el("button", { class: "an-primary", text: "Comment" });
+    var save = el("button", { class: "an-primary", text: pinComposer ? "Post" : "Comment" });
     var cancel = el("button", { class: "an-ghost", text: "Cancel" });
-    var plat = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent || "";
-    var isMac = /Mac|iPhone|iPad/i.test(plat);
     composer.appendChild(el("div", { class: "an-cfoot" }, [
-      el("span", { class: "an-ckbd", text: (isMac ? "⌘" : "Ctrl") + "↵ to post" }),
-      cancel, save,
+      el("span", { class: "an-ckbd", text: pinComposer ? "Enter to post · Shift+↵ for newline" : "Enter to post · Shift+↵ for a new line" }),
+      pinComposer ? null : cancel, save,
     ]));
     listen(save, "click", function () {
-      if (!state.author) { askName(function () { save.click(); }); return; }
+      if (!ta.value.trim()) { ta.focus(); return; }
+      if (!state.author && !pinComposer) { askName(function () { save.click(); }); return; }
       draft.author = state.author;
       draft.text = ta.value.trim();
       commitDraft(draft);
     });
-    listen(cancel, "click", cancelDraft);
+    if (!pinComposer) listen(cancel, "click", cancelDraft);
     listen(ta, "keydown", function (e) {
-      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") save.click();
+      if (e.key === "Enter" && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
+        e.preventDefault(); save.click();
+      }
       if (e.key === "Escape") cancelDraft();
       e.stopPropagation();
     });
 
     var vw = window.innerWidth, vh = window.innerHeight;
-    var W = Math.min(304, vw - 16), H = 210;
+    var W = Math.min(pinComposer ? uiPx(280) : 304, vw - 16), H = pinComposer ? uiPx(104) : 210;
     var mobile = vw <= 640;
     var px, py;
     if (mobile) {
@@ -1570,12 +1957,12 @@
 
   function swatchDot(color) {
     var d = el("span");
-    d.style.cssText = "width:11px;height:11px;border-radius:50%;display:inline-block;background:" + color;
+    d.style.cssText = scaleUiCss("width:11px;height:11px;border-radius:50%;display:inline-block;background:" + color);
     return d;
   }
   var tempMarks = [];
-  function paintTemp(range, color) {
-    tempMarks = paintRange(range, color, "__temp");
+  function paintTemp(range) {
+    tempMarks = paintRange(range, "__temp");
   }
   function clearTemp() {
     tempMarks.forEach(function (m) { m.remove(); });
@@ -1599,8 +1986,8 @@
     state.activeId = c.id;
     renderAll();
     renderPanel();
-    openPanel();
-    setTool("cursor");
+    if (draft.type === "pin") setTool("pin");
+    else { openPanel(); setTool("cursor"); }
     pendingDraft = null;
   }
 
@@ -1615,7 +2002,7 @@
     if (state.tool === "pin") return;
     if (composer && composer.classList.contains("an-show")) return;
     if (composer && composer.contains(e.target)) return;
-    if (e.target.closest && (e.target.closest("#__an_bar") || e.target.closest("#__an_panel") || e.target.closest("#__an_toasts"))) return;
+    if (e.target.closest && (e.target.closest("#__an_bar") || e.target.closest("#__an_panel") || e.target.closest("#__an_toasts") || e.target.closest("#__an_overlay") || e.target.closest("#__an_pins"))) return;
     setTimeout(function () {
       var sel = window.getSelection();
       if (!sel || sel.isCollapsed) return;
@@ -1624,7 +2011,7 @@
       var q = quoteFromRange(range);
       if (!q) return;
       var rect = range.getBoundingClientRect();
-      paintTemp(range.cloneRange(), state.color);
+      paintTemp(range.cloneRange());
       sel.removeAllRanges();
       openComposer(rect.left, rect.bottom + 6, { type: "highlight", color: state.color, anchor: q });
     }, 0);
@@ -1634,7 +2021,7 @@
   function onDown(e) {
     if (!state.enabled) return;
     if (e.button !== 0 && e.pointerType === "mouse") return;
-    if (e.target.closest && (e.target.closest("#__an_bar") || e.target.closest("#__an_panel") || e.target.closest("#__an_compose") || e.target.closest("#__an_toasts")))
+    if (e.target.closest && (e.target.closest("#__an_bar") || e.target.closest("#__an_panel") || e.target.closest("#__an_compose") || e.target.closest("#__an_toasts") || e.target.closest("#__an_overlay") || e.target.closest("#__an_pins")))
       return;
     var t = state.tool;
     if (t === "pin") {
@@ -1736,14 +2123,18 @@
   listen(document, "pointerdown", onDown, true);
   listen(document, "pointermove", onMove, true);
   listen(document, "pointerup", onUp, true);
+  listen(document, "pointermove", moveMarkerDrag, true);
+  listen(document, "pointerup", function (e) { finishMarkerDrag(e, true); }, true);
+  listen(document, "pointercancel", function (e) { finishMarkerDrag(e, false); }, true);
 
   // ==========================================================================
   // TOOLBAR + PANEL UI
   // ==========================================================================
   var bar, panel, listEl, footEl, countBadge, hintEl, launchEl, helpEl, noteEl;
+  var shapeTool = "rect", shapeButton = null, shapeMore = null, shapeMenu = null, shapeOptions = [];
   var SIDE = CFG.position === "bottom-left" ? "an-left" : "an-right";
   function buildUI() {
-    var style = el("style", { id: "__an_style", html: CSS_TEXT });
+    var style = el("style", { id: "__an_style", html: scaleUiCss(CSS_TEXT) });
     var _nonce = SCRIPT && (SCRIPT.nonce || SCRIPT.getAttribute("nonce"));
     if (_nonce) style.setAttribute("nonce", _nonce);
     document.head.appendChild(style);
@@ -1758,11 +2149,42 @@
 
     bar = el("div", { id: "__an_bar", class: SIDE });
     var tools = [
-      ["cursor", "Browse", "V"], ["highlight", "Highlight text", "H"],
-      ["rect", "Rectangle", "R"], ["circle", "Circle", "C"],
-      ["pen", "Freehand", "D"], ["pin", "Pin", "P"],
+      ["cursor", "Browse", "V"], ["pin", "Pin", "P"],
+      ["highlight", "Highlight text", "H"], ["shape-group"],
+      ["pen", "Freehand", "D"],
     ];
     tools.forEach(function (t) {
+      if (t[0] === "shape-group") {
+        var group = el("div", { class: "an-toolgroup" });
+        shapeButton = el("button", { class: "an-btn", "data-tool": shapeTool,
+          "data-tip": "Rectangle  ·  R", title: "Rectangle  ·  R", "aria-label": "Rectangle tool", html: ICONS.rect });
+        listen(shapeButton, "click", function () { setTool(shapeTool); setShapeMenuOpen(false); });
+        group.appendChild(shapeButton);
+
+        shapeMore = el("button", { class: "an-tool-more", type: "button", "aria-label": "More shape tools",
+          title: "More shape tools", "aria-controls": "__an_shape_menu", "aria-expanded": "false" });
+        shapeMenu = el("div", { class: "an-tool-menu", id: "__an_shape_menu", role: "group", "aria-label": "Shape tools" });
+        [["rect", "Rectangle", "R"], ["circle", "Circle", "C"]].forEach(function (option) {
+          var item = el("button", { class: "an-tool-option", type: "button", "data-shape-tool": option[0],
+            "aria-pressed": option[0] === shapeTool ? "true" : "false",
+            html: ICONS[option[0]] + "<span>" + option[1] + " <kbd>" + option[2] + "</kbd></span>" });
+          listen(item, "click", function () {
+            setTool(option[0]); setShapeMenuOpen(false); shapeButton.focus();
+          });
+          shapeOptions.push(item); shapeMenu.appendChild(item);
+        });
+        listen(shapeMore, "click", function (e) {
+          e.stopPropagation(); setShapeMenuOpen(!shapeMenu.classList.contains("an-show"));
+        });
+        listen(shapeMore, "keydown", function (e) {
+          if (e.key === "ArrowDown") { e.preventDefault(); setShapeMenuOpen(true); }
+        });
+        group.appendChild(shapeMore); group.appendChild(shapeMenu); bar.appendChild(group);
+        listen(document, "click", function (e) {
+          if (!group.contains(e.target)) setShapeMenuOpen(false);
+        });
+        return;
+      }
       var tip = t[1] + "  ·  " + t[2];
       var b = el("button", {
         class: "an-btn", "data-tool": t[0], "data-tip": tip,
@@ -1773,28 +2195,6 @@
     });
     bar.appendChild(el("div", { class: "an-sep" }));
 
-    var colorBtn = el("button", { id: "__an_colorbtn", "data-tip": "Color", title: "Color", "aria-label": "Color" });
-    var colorDot = el("span", { class: "an-swdot" });
-    colorDot.style.background = state.color;
-    colorBtn.appendChild(colorDot);
-    var colorPop = el("div", { id: "__an_colorpop" });
-    COLORS.forEach(function (c) {
-      var sw = el("div", { class: "an-sw" + (c.hex === state.color ? " an-on" : ""), "data-c": c.hex, title: c.name });
-      sw.style.background = c.hex;
-      listen(sw, "click", function (e) {
-        e.stopPropagation();
-        state.color = c.hex;
-        store.set("an-color", c.hex);
-        colorDot.style.background = c.hex;
-        colorPop.querySelectorAll(".an-sw").forEach(function (x) { x.classList.toggle("an-on", x.getAttribute("data-c") === c.hex); });
-        colorPop.classList.remove("an-show");
-      });
-      colorPop.appendChild(sw);
-    });
-    colorBtn.appendChild(colorPop);
-    listen(colorBtn, "click", function (e) { e.stopPropagation(); colorPop.classList.toggle("an-show"); });
-    listen(document, "click", function () { colorPop.classList.remove("an-show"); });
-    bar.appendChild(colorBtn);
     bar.appendChild(el("div", { class: "an-sep" }));
 
     var listBtn = el("button", { class: "an-btn", "data-tip": "Comments  ·  A", title: "Comments  ·  A", "aria-label": "Comments", html: ICONS.list });
@@ -1874,6 +2274,9 @@
       if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.nodeName)) return;
       if (e.target && e.target.isContentEditable) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === "Escape" && shapeMenu && shapeMenu.classList.contains("an-show")) {
+        setShapeMenuOpen(false); shapeMore.focus(); return;
+      }
       if (e.key === "o") { setEnabled(!state.enabled); return; }
       if (!state.enabled) return;
       var map = { v: "cursor", h: "highlight", r: "rect", c: "circle", d: "pen", p: "pin" };
@@ -2018,7 +2421,7 @@
     if (!plusTarget) return false;
     var pr = plusBtn.getBoundingClientRect();
     var tr = plusTarget.getBoundingClientRect();
-    var pad = 18;
+    var pad = uiPx(18);
     if (x >= tr.left - pad && x <= tr.right + pad && y >= tr.top - pad && y <= tr.bottom + pad) return true;
     if (x >= pr.left - pad && x <= pr.right + pad && y >= pr.top - pad && y <= pr.bottom + pad) return true;
     if (x >= pr.left - pad && x <= tr.left + pad && y >= pr.top - pad && y <= pr.bottom + pad) return true;
@@ -2032,9 +2435,9 @@
     if (!lh || isNaN(lh)) lh = parseFloat(cs.fontSize) * 1.3;
     var padTop = parseFloat(cs.paddingTop) || 0;
     var firstLineMid = r.top + padTop + lh / 2;
-    var top = firstLineMid - 15;
-    var left = r.left - 40;
-    if (left < 6) left = r.left + 6;
+    var top = firstLineMid - uiPx(15);
+    var left = r.left - uiPx(40);
+    if (left < uiPx(6)) left = r.left + uiPx(6);
     plusBtn.style.left = left + "px";
     plusBtn.style.top = top + "px";
     clearTimeout(plusHideTimer);
@@ -2064,6 +2467,7 @@
       closePanel();
       hidePlus(true);
       if (helpEl) helpEl.classList.remove("an-show");
+      closeMarkerPopover();
       clearVisuals();
       if (overlay) overlay.style.display = "none";
       if (pinLayer) pinLayer.style.display = "none";
@@ -2078,6 +2482,11 @@
 
   function setTool(t) {
     state.tool = t;
+    if (t === "rect" || t === "circle") shapeTool = t;
+    syncShapeToolGroup();
+    if (shapeButton && shapeButton.parentElement) {
+      shapeButton.parentElement.classList.toggle("an-toolgroup-active", t === "rect" || t === "circle");
+    }
     bar.querySelectorAll(".an-btn[data-tool]").forEach(function (b) {
       b.classList.toggle("an-on", b.getAttribute("data-tool") === t);
     });
@@ -2087,6 +2496,25 @@
       rect: "Drag to draw a rectangle", circle: "Drag to draw a circle",
       pen: "Draw freehand — release to comment", pin: "Click anywhere to drop a pin" };
     if (hints[t]) showHint(hints[t]); else hideHint();
+  }
+  function syncShapeToolGroup() {
+    if (!shapeButton) return;
+    var label = shapeTool === "circle" ? "Circle" : "Rectangle";
+    var shortcut = shapeTool === "circle" ? "C" : "R";
+    shapeButton.innerHTML = ICONS[shapeTool];
+    shapeButton.setAttribute("data-tool", shapeTool);
+    shapeButton.setAttribute("data-tip", label + "  ·  " + shortcut);
+    shapeButton.title = label + "  ·  " + shortcut;
+    shapeButton.setAttribute("aria-label", label + " tool");
+    shapeOptions.forEach(function (item) {
+      item.setAttribute("aria-pressed", item.getAttribute("data-shape-tool") === shapeTool ? "true" : "false");
+    });
+  }
+  function setShapeMenuOpen(open) {
+    if (!shapeMenu || !shapeMore) return;
+    shapeMenu.classList.toggle("an-show", open);
+    shapeMore.setAttribute("aria-expanded", String(open));
+    if (open && shapeOptions.length) shapeOptions[0].focus();
   }
   function showHint(txt) {
     hintEl.innerHTML = "";
@@ -2185,7 +2613,7 @@
         avatarEl(c.author),
         el("span", { class: "an-author", text: c.author || "Anonymous" }),
         el("span", { class: "an-tag" }, [
-          (function(){ var d = el("span",{class:"an-dot"}); d.style.background=c.color; return d; })(),
+          (function(){ var d = el("span",{class:"an-dot"}); d.style.background=ANNOTATION_COLOR; return d; })(),
           document.createTextNode("#" + idx + " " + (TYPE_LABEL[c.type] || c.type)),
         ]),
         c.resolved ? el("span", { class: "an-rbadge", html: ICONS.check + "<span>Resolved</span>" }) : null,

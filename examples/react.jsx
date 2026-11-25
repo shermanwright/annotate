@@ -9,7 +9,7 @@ import { useEffect } from "react";
 
 export default function Annotate({
   project = "my-react-app",
-  accent = "#6d28d9",
+  accent,
   theme = "auto",
   src = "https://cdn.jsdelivr.net/npm/@reviewjs/annotate/annotate.js",
 }) {

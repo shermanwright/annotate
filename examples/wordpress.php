@@ -47,7 +47,6 @@ function annotatejs_config() {
 	<script>
 		window.AnnotateConfig = {
 			project: "<?php echo esc_js( get_bloginfo( 'name' ) ); ?>",
-			accent: "#6d28d9",
 			theme: "auto"
 		};
 	</script>

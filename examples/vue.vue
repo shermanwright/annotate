@@ -47,7 +47,7 @@ onMounted(() => {
     </script>
 
     <template>
-      <Annotate project="marketing-site" accent="#6d28d9" />
+      <Annotate project="marketing-site" />
       <!-- ...your app... -->
     </template>
 -->

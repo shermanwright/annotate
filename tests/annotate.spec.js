@@ -117,16 +117,20 @@ test.describe('Toolbar', () => {
   test('renders with all tool buttons', async ({ page }) => {
     const bar = page.locator('#__an_bar');
     await expect(bar).toBeVisible();
-    for (const tool of ['cursor', 'highlight', 'rect', 'circle', 'pen', 'pin']) {
+    for (const tool of ['cursor', 'highlight', 'rect', 'pen', 'pin']) {
       await expect(bar.locator(`[data-tool="${tool}"]`)).toBeVisible();
     }
+    await bar.getByRole('button', { name: 'More shape tools' }).click();
+    await expect(bar.locator('[data-shape-tool="rect"]')).toBeVisible();
+    await expect(bar.locator('[data-shape-tool="circle"]')).toBeVisible();
   });
 
   test('tool buttons expose accessible names', async ({ page }) => {
     await expect(page.locator('[data-tool="cursor"]')).toHaveAttribute('aria-label', 'Browse');
     await expect(page.locator('[data-tool="highlight"]')).toHaveAttribute('aria-label', 'Highlight text');
     await expect(page.locator('[data-tool="pin"]')).toHaveAttribute('aria-label', 'Pin');
-    await expect(page.locator('#__an_colorbtn')).toHaveAttribute('aria-label', 'Color');
+    await expect(page.locator('#__an_shape_menu')).toHaveAttribute('aria-label', 'Shape tools');
+    await expect(page.locator('#__an_colorbtn')).toHaveCount(0);
   });
 
   test('cursor tool is active by default', async ({ page }) => {
@@ -149,17 +153,8 @@ test.describe('Toolbar', () => {
     await expect(page.locator('#__an_bar')).toBeVisible();
   });
 
-  test('color picker opens and changes color', async ({ page }) => {
-    await page.locator('#__an_colorbtn').click();
-    const pop = page.locator('#__an_colorpop');
-    await expect(pop).toBeVisible();
-    // click rose swatch (index 1)
-    await pop.locator('.an-sw').nth(1).click();
-    await expect(pop).not.toBeVisible();
-    // dot reflects new color
-    const dot = page.locator('#__an_colorbtn .an-swdot');
-    const bg = await dot.evaluate(el => el.style.background);
-    expect(bg).toContain('244'); // #f43f5e has R=244
+  test('annotation color control was removed from the toolbar', async ({ page }) => {
+    await expect(page.locator('#__an_colorbtn, #__an_colorpop')).toHaveCount(0);
   });
 });
 
@@ -263,13 +258,13 @@ test.describe('Pin tool', () => {
     // Pin dot should appear in overlay/pin layer
     await expect(page.locator('.an-pin')).toHaveCount(1);
 
-    // Panel opens and shows the comment
-    await expect(page.locator('#__an_panel')).toHaveClass(/an-open/);
-    await expect(page.locator('.an-card')).toHaveCount(1);
-    await expect(page.locator('.an-body')).toContainText('Pin comment text');
+    // A saved pin opens its comment inline when selected.
+    await page.locator('.an-pin').click();
+    await expect(page.locator('.an-pin')).toHaveClass(/an-pin-expanded/);
+    await expect(page.locator('.an-pin-content-text')).toContainText('Pin comment text');
   });
 
-  test('clicking pin navigates to it in panel', async ({ page }) => {
+  test('clicking pin opens its inline comment detail', async ({ page }) => {
     await page.keyboard.press('p');
     const hero = page.locator('header.hero h1');
     await hero.click();
@@ -277,10 +272,9 @@ test.describe('Pin tool', () => {
     await composer.locator('textarea').fill('Test pin');
     await composer.locator('.an-primary').click();
 
-    await page.locator('#__an_panel .an-x').click();
     await page.locator('.an-pin').click();
-    await expect(page.locator('#__an_panel')).toHaveClass(/an-open/);
-    await expect(page.locator('.an-card.an-active')).toHaveCount(1);
+    await expect(page.locator('.an-pin')).toHaveClass(/an-pin-expanded/);
+    await expect(page.locator('.an-pin-content-text')).toContainText('Test pin');
   });
 });
 
@@ -372,6 +366,7 @@ test.describe('Comment actions', () => {
     await page.locator('header.hero h1').click();
     await page.locator('#__an_compose textarea').fill('Initial comment');
     await page.locator('#__an_compose .an-primary').click();
+    await page.keyboard.press('a');
   });
 
   test('reply to a comment via Ctrl+Enter', async ({ page }) => {
@@ -1321,6 +1316,7 @@ test.describe('Startup bubble & author config', () => {
     await expect(composer).toHaveClass(/an-show/);
     await composer.locator('textarea').fill('A note');
     await composer.locator('.an-primary').click();
+    await page.keyboard.press('a');
     await expect(page.locator('#__an_panel')).toHaveClass(/an-open/);
     const footRow = page.locator('#__an_foot .an-footrow');
     await expect(footRow.locator('button:has-text("Share")')).toBeVisible();

@@ -956,7 +956,7 @@
     .an-btn[data-tip]:hover::after { display:none; }
     #__an_hint { font-size:11px; padding:7px 12px; }
     #__an_bar { padding:0; gap:0; }
-    .an-btn { width:36px; height:36px; }
+    .an-btn { width:40px; height:40px; }
     #__an_panel .an-list { -webkit-overflow-scrolling: touch; }
     .an-ph { padding:14px 14px 10px; }
     #__an_foot .an-footrow { flex-wrap:wrap; }
